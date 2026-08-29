@@ -3,35 +3,8 @@
 #include "NightfallGameUserSettings.h"
 
 #include "Engine/Engine.h"
-#include "HAL/IConsoleManager.h"
 #include "Nightfall.h"
-
-namespace
-{
-	void SetConsoleVariable(const TCHAR* Name, int32 Value)
-	{
-		if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name, /*bTrackFrequentCalls=*/false))
-		{
-			Variable->Set(Value, ECVF_SetByGameSetting);
-		}
-		else
-		{
-			UE_LOG(LogNightfall, Warning, TEXT("Console variable '%s' not found; setting had no effect."), Name);
-		}
-	}
-
-	void SetConsoleVariable(const TCHAR* Name, float Value)
-	{
-		if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name, /*bTrackFrequentCalls=*/false))
-		{
-			Variable->Set(Value, ECVF_SetByGameSetting);
-		}
-		else
-		{
-			UE_LOG(LogNightfall, Warning, TEXT("Console variable '%s' not found; setting had no effect."), Name);
-		}
-	}
-}
+#include "NightfallCVar.h"
 
 UNightfallGameUserSettings::UNightfallGameUserSettings()
 {
@@ -68,11 +41,13 @@ void UNightfallGameUserSettings::ApplyNonResolutionSettings()
 {
 	Super::ApplyNonResolutionSettings();
 
-	// Lighting features first: the upscaler's cost depends on what they leave behind.
-	SetConsoleVariable(TEXT("r.Lumen.HardwareRayTracing"), bLumenHardwareRayTracing ? 1 : 0);
-	SetConsoleVariable(TEXT("r.MegaLights.Allowed"), bMegaLights ? 1 : 0);
-	SetConsoleVariable(TEXT("r.Shadow.Virtual.Enable"), bVirtualShadowMaps ? 1 : 0);
-	SetConsoleVariable(TEXT("r.Lumen.TranslucencyReflections.FrontLayer.Allow"), bRayTracedTranslucency ? 1 : 0);
+	// Lighting features first: the upscaler's cost depends on what they leave behind. Two
+	// of these four are named in the project's own renderer settings, which is why they go
+	// through NightfallCVar rather than straight at the console manager - see that header.
+	NightfallCVar::Set(TEXT("r.Lumen.HardwareRayTracing"), bLumenHardwareRayTracing ? 1 : 0);
+	NightfallCVar::Set(TEXT("r.MegaLights.Allowed"), bMegaLights ? 1 : 0);
+	NightfallCVar::Set(TEXT("r.Shadow.Virtual.Enable"), bVirtualShadowMaps ? 1 : 0);
+	NightfallCVar::Set(TEXT("r.Lumen.TranslucencyReflections.FrontLayer.Allow"), bRayTracedTranslucency ? 1 : 0);
 
 	// Volumetric fog distance is a component property rather than a console variable, so
 	// ANightfallSkyDirector reads it back from here every frame.

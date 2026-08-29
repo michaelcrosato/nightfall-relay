@@ -4,6 +4,7 @@
 
 #include "HAL/IConsoleManager.h"
 #include "Nightfall.h"
+#include "NightfallCVar.h"
 
 #define LOCTEXT_NAMESPACE "Nightfall"
 
@@ -31,20 +32,17 @@ namespace
 		return IConsoleManager::Get().FindConsoleVariable(Name, /*bTrackFrequentCalls=*/false);
 	}
 
+	// A missing variable is the normal case here rather than a fault: the NVIDIA ones only
+	// exist when the plugins are installed, and IsDlssAvailable already speaks for them.
+	// A variable that exists and refuses the write is still reported.
 	void SetIfPresent(const TCHAR* Name, int32 Value)
 	{
-		if (IConsoleVariable* Variable = Find(Name))
-		{
-			Variable->Set(Value, ECVF_SetByGameSetting);
-		}
+		NightfallCVar::Set(Name, Value, /*bWarnIfNotFound=*/false);
 	}
 
 	void SetIfPresent(const TCHAR* Name, float Value)
 	{
-		if (IConsoleVariable* Variable = Find(Name))
-		{
-			Variable->Set(Value, ECVF_SetByGameSetting);
-		}
+		NightfallCVar::Set(Name, Value, /*bWarnIfNotFound=*/false);
 	}
 
 	/**

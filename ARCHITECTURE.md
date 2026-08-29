@@ -150,6 +150,12 @@ from that.
   Surface interest comes from lighting; the albedo range across the whole palette is 0.017
   to 0.085, which is what makes emissive panels read as the brightest thing in frame.
 
+Everything the settings menu changes is a console variable, and every one of those writes
+goes through `NightfallCVar::Set`. It writes at `ECVF_SetByGameOverride` so a player choice
+outranks the project's own renderer settings rather than being silently dropped by them,
+and it reads the variable's tier back afterwards so a write that could not land says so.
+See DECISIONS.md for the two toggles that shipped inert before it existed.
+
 ### Upscaling
 
 `NightfallUpscaling` drives DLSS, Ray Reconstruction, frame generation and Reflex entirely
