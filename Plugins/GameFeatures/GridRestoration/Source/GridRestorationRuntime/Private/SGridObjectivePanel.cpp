@@ -2,7 +2,6 @@
 
 #include "SGridObjectivePanel.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "Engine/World.h"
 #include "GridRestorationSubsystem.h"
 #include "UI/NightfallUIStyle.h"
@@ -17,11 +16,6 @@ namespace
 {
 	constexpr float ProgressBarWidth = 320.0f;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 }
 
 void SGridObjectivePanel::Construct(const FArguments& InArgs)
@@ -31,7 +25,7 @@ void SGridObjectivePanel::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::PanelBackground()))
 		.Padding(FMargin(18.0f, 12.0f))
 		[
@@ -86,7 +80,7 @@ void SGridObjectivePanel::Construct(const FArguments& InArgs)
 						})
 						[
 							SNew(SBorder)
-							.BorderImage(SolidBrush())
+							.BorderImage(FNightfallUIStyle::SolidBrush())
 							.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::Accent()))
 						]
 					]
@@ -94,7 +88,7 @@ void SGridObjectivePanel::Construct(const FArguments& InArgs)
 					+ SHorizontalBox::Slot().FillWidth(1.0f)
 					[
 						SNew(SBorder)
-						.BorderImage(SolidBrush())
+						.BorderImage(FNightfallUIStyle::SolidBrush())
 						.BorderBackgroundColor(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.14f)))
 					]
 				]

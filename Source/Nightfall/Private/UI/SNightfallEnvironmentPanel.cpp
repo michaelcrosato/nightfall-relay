@@ -2,7 +2,6 @@
 
 #include "UI/SNightfallEnvironmentPanel.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "Engine/World.h"
 #include "NightfallWorldClockSubsystem.h"
 #include "UI/NightfallUIStyle.h"
@@ -18,11 +17,6 @@ namespace
 	/** Keeps the panel from breathing as the clock and the temperature change width. */
 	constexpr float PanelMinWidth = 228.0f;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 
 	FText PhaseLabel(ENightfallTimePhase Phase)
 	{
@@ -43,7 +37,7 @@ void SNightfallEnvironmentPanel::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::PanelBackground()))
 		.Padding(FMargin(14.0f, 10.0f))
 		[

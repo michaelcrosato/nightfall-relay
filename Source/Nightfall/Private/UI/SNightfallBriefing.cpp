@@ -2,7 +2,6 @@
 
 #include "UI/SNightfallBriefing.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "UI/NightfallUIStyle.h"
 #include "Widgets/Layout/SBorder.h"
 #include "Widgets/Layout/SBox.h"
@@ -20,11 +19,6 @@ namespace
 	/** Key column in the controls block, wide enough for "W A S D". */
 	constexpr float KeyColumnWidth = 104.0f;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 }
 
 void SNightfallBriefing::AddHeading(const TSharedRef<SVerticalBox>& Container, const FText& Label)
@@ -170,14 +164,14 @@ void SNightfallBriefing::Construct(const FArguments& InArgs)
 		// A dimmer across the whole viewport rather than a black screen: the dusk this card
 		// is describing stays visible behind it.
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.38f)))
 		.HAlign(HAlign_Center)
 		.VAlign(VAlign_Center)
 		.Padding(FMargin(0.0f))
 		[
 			SNew(SBorder)
-			.BorderImage(SolidBrush())
+			.BorderImage(FNightfallUIStyle::SolidBrush())
 			.BorderBackgroundColor(FSlateColor(FLinearColor(0.006f, 0.008f, 0.012f, 0.96f)))
 			.Padding(FMargin(34.0f, 28.0f))
 			[

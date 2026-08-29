@@ -2,7 +2,6 @@
 
 #include "UI/SNightfallPerfHud.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "Engine/World.h"
 #include "NightfallPerfSubsystem.h"
 #include "NightfallWorldClockSubsystem.h"
@@ -22,11 +21,6 @@ namespace
 	/** Width in characters of the name column, so values line up in the mono font. */
 	constexpr int32 NameColumnWidth = 26;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 
 	/** Left-justify and clip a name so the value column never moves. */
 	FString PadName(const FString& Name)
@@ -187,7 +181,7 @@ void SNightfallPerfHud::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::PanelBackground()))
 		.Padding(FMargin(10.0f, 8.0f))
 		.Visibility_Lambda([this]() { return GetVisibilityForMode(ENightfallPerfHudMode::Compact); })

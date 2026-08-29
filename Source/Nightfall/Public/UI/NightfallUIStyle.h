@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Styling/SlateBrush.h"
 #include "Styling/SlateColor.h"
 #include "Styling/SlateTypes.h"
 
@@ -16,6 +17,17 @@
  */
 struct NIGHTFALL_API FNightfallUIStyle
 {
+	/**
+	 * A one-pixel white brush, for tinting with SBorder::BorderBackgroundColor.
+	 *
+	 * Every panel in the project needs one and each used to define its own in a file-local
+	 * anonymous namespace. Under a unity build those all land in one translation unit and
+	 * collide, so the module only compiled while adaptive unity happened to be pulling the
+	 * files back out again - see DECISIONS.md. One brush, named once, is also simply what
+	 * this struct is for.
+	 */
+	static const FSlateBrush* SolidBrush();
+
 	/** Monospaced face for numbers, so columns line up as values change width. */
 	static FSlateFontInfo GetMonoFont(int32 Size);
 

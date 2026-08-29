@@ -2,7 +2,14 @@
 
 #include "UI/NightfallUIStyle.h"
 
+#include "Brushes/SlateColorBrush.h"
 #include "Styling/CoreStyle.h"
+
+const FSlateBrush* FNightfallUIStyle::SolidBrush()
+{
+	static const FSlateColorBrush Brush(FLinearColor::White);
+	return &Brush;
+}
 
 FSlateFontInfo FNightfallUIStyle::GetMonoFont(int32 Size)
 {

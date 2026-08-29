@@ -2,7 +2,6 @@
 
 #include "SScannerPanel.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "ScannerComponent.h"
 #include "UI/NightfallUIStyle.h"
 #include "Widgets/Layout/SBorder.h"
@@ -17,11 +16,6 @@ namespace
 	/** Must be at least UScannerComponent::MaxContacts. */
 	constexpr int32 MaxContactRows = 8;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 
 	/** A coarse arrow for a relative bearing, which reads faster than a number. */
 	FString BearingGlyph(float RelativeBearing)
@@ -96,7 +90,7 @@ void SScannerPanel::Construct(const FArguments& InArgs)
 	ChildSlot
 	[
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::PanelBackground()))
 		.Padding(FMargin(12.0f, 9.0f))
 		[

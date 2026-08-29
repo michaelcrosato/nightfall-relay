@@ -2,7 +2,6 @@
 
 #include "UI/SNightfallReticle.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "Engine/World.h"
 #include "GameFramework/Pawn.h"
 #include "Kismet/GameplayStatics.h"
@@ -21,11 +20,6 @@ namespace
 	/** Width in slate units of the hold progress bar. */
 	constexpr float HoldBarWidth = 128.0f;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 }
 
 void SNightfallReticle::Construct(const FArguments& InArgs)
@@ -42,7 +36,7 @@ void SNightfallReticle::Construct(const FArguments& InArgs)
 			SNew(SBox).WidthOverride(5.0f).HeightOverride(5.0f)
 			[
 				SNew(SBorder)
-				.BorderImage(SolidBrush())
+				.BorderImage(FNightfallUIStyle::SolidBrush())
 				.BorderBackgroundColor_Lambda([this]()
 				{
 					const UNightfallInteractorComponent* Interactor = GetInteractor();
@@ -79,7 +73,7 @@ void SNightfallReticle::Construct(const FArguments& InArgs)
 					})
 					[
 						SNew(SBorder)
-						.BorderImage(SolidBrush())
+						.BorderImage(FNightfallUIStyle::SolidBrush())
 						.BorderBackgroundColor(FSlateColor(FNightfallUIStyle::Accent()))
 					]
 				]
@@ -87,7 +81,7 @@ void SNightfallReticle::Construct(const FArguments& InArgs)
 				+ SHorizontalBox::Slot().FillWidth(1.0f)
 				[
 					SNew(SBorder)
-					.BorderImage(SolidBrush())
+					.BorderImage(FNightfallUIStyle::SolidBrush())
 					.BorderBackgroundColor(FSlateColor(FLinearColor(1.0f, 1.0f, 1.0f, 0.16f)))
 				]
 			]

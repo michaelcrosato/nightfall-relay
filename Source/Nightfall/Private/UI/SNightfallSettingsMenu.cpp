@@ -2,7 +2,6 @@
 
 #include "UI/SNightfallSettingsMenu.h"
 
-#include "Brushes/SlateColorBrush.h"
 #include "NightfallGameUserSettings.h"
 #include "NightfallUpscaling.h"
 #include "UI/NightfallUIStyle.h"
@@ -23,11 +22,6 @@ namespace
 	/** Wide enough for label, both arrows and the longest value without clipping. */
 	constexpr float PanelWidth = 660.0f;
 
-	const FSlateBrush* SolidBrush()
-	{
-		static const FSlateColorBrush Brush(FLinearColor::White);
-		return &Brush;
-	}
 
 	/** Wrap an index into [0, Count) so stepping past either end rolls around. */
 	int32 WrapIndex(int32 Index, int32 Count)
@@ -100,7 +94,7 @@ void SNightfallSettingsMenu::Construct(const FArguments& InArgs)
 	.VAlign(VAlign_Center)
 	[
 		SNew(SBorder)
-		.BorderImage(SolidBrush())
+		.BorderImage(FNightfallUIStyle::SolidBrush())
 		.BorderBackgroundColor(FSlateColor(FLinearColor(0.006f, 0.008f, 0.012f, 0.96f)))
 		.Padding(FMargin(34.0f, 28.0f))
 		[
