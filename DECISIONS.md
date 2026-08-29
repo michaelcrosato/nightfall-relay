@@ -1,0 +1,182 @@
+# Decisions
+
+Every choice, install and deferral, one line each.
+
+---
+
+## Concept
+
+- **Nightfall Relay** — you restore a derelict solar-relay field at dusk by carrying power cells to relay pylons; every pylon you energise lights the ground around it while sentinel drones contest the dark.
+- Picked because it makes lighting *be* the gameplay: the reward for progress is that you can see, which is the only concept where "all the budget on light" and "a gameplay loop" are the same sentence.
+- Art direction **Cold Iron and Sodium**: albedo across the whole palette held between 0.017 and 0.085 so every bit of colour in a frame arrives as light, sodium amber for the grid, cyan for player tech, red for hostile.
+
+## Installs
+
+- **UE 5.8.2** — already present at `C:\Program Files\Epic Games\UE_5.8`; used as-is rather than installing a second engine.
+- **Visual Studio Build Tools 2022 updated 17.14.34 → 17.14.39** — required, because the installed MSVC binaries were `cl 14.44.35207` and UE 5.8 bans `14.44.0–14.44.35210` for a template compile error.
+- **VS components added** — `Workload.VCTools`, `VC.Tools.x86.x64`, `Windows11SDK.26100`, `.NET 4.6.2 targeting pack`, `VC.Llvm.Clang`, `VC.ATL`.
+- **Toolchain verified as 14.44.35228** — UBT reads `cl.exe`'s product version, not the toolset folder name, so the folder still reading `14.44.35207` is cosmetic.
+- **Nothing else installed** — `git`, `gh`, `python`, `uv`, `pnpm`, `node`, `rg`, `fd`, `jq` were already present and sufficient.
+- **NVIDIA DLSS and Streamline UE plugins NOT installed** — they are distributed from `developer.nvidia.com` behind an account login with no automatable download, and the only GitHub mirrors are unofficial one-star forks I will not pull binary DLLs from. See *Upscaling* below for what was built instead.
+
+## Engine and plugins enabled
+
+- `ModularGameplay`, `GameFeatures` — the extension mechanism the whole architecture rests on.
+- `EnhancedInput` — the only input path; legacy input is not registered.
+- `PCG` — deterministic debris scatter.
+- `GeometryScripting` + `StaticMeshEditorModeling` — all 42 meshes are generated through them.
+- `PythonScriptPlugin` + `EditorScriptingUtilities` — the content build runs in a headless editor.
+- `ModelingToolsEditorMode` — editor-side companion to Geometry Script.
+- `Niagara` disabled and unlinked — it is not used, and an enabled plugin that nothing includes is dead weight in the cook; see *Deferred* for why.
+
+## Rendering
+
+- **Lumen GI and reflections on hardware ray tracing** (`r.Lumen.HardwareRayTracing=1`, `LightingMode=2`).
+- **Virtual shadow maps** for everything — no cascade tuning, and the sun and moon go through VSM because MegaLights does not handle directional lights.
+- **MegaLights enabled project-wide** — every pylon has two shadowed lights, every drone a shadowed beam, every door a shadowed rect light, every live cell a shadowed point light.
+- **Ray-traced translucency** on via `r.Lumen.TranslucencyReflections.FrontLayer`, exposed as a settings toggle.
+- **Nanite off** — at ~4,600 triangles per terrain tile and a few hundred per machine, cluster overhead costs more than it saves.
+- **Static lighting off** — every light moves with the day cycle, so lightmaps would be dead weight.
+- **`r.SkinCache.CompileShaders=True`** — set to False first, on the reasoning that a project with zero skeletal meshes does not need it; UE 5.8 hard-asserts at startup with `Ray tracing requires skin cache to be enabled`, so it is on. Costs shader compile time and nothing at runtime.
+- **Extended default luminance range on, exposure authored in EV100** — lights are authored in lux, so exposure has to speak the same language; the first build clipped to pure white because the min/max were still raw-luminance values.
+- **`r.EyeAdaptation.CachedLightingPreExposure=8.0`** — the default of 4 covers EV [-8, 12] and clipped Lumen's cached lighting at midday; 8 covers EV [-4, 16], which is the range the sky director actually drives.
+- **Sun light hidden below the horizon** — a directional light does not care that the atmosphere has occluded it, so leaving it on at twilight lit every surface from underneath.
+- **`ForwardShadingPriority` set on the sun** — two atmosphere lights means the renderer has to be told which one owns forward shading, translucency and volumetric fog.
+- **Anti-aliasing defaults to TSR** and is the fallback whenever DLSS is unavailable.
+- **Flat albedo, no textures** — the only texture in the project is the grading LUT; surface interest is entirely lighting.
+
+## Upscaling
+
+- **DLSS integration is console-variable driven and plugin-optional** — `NightfallUpscaling` looks up `r.NGX.DLSS.Enable`, `r.NGX.DLSS.Quality`, `r.NGX.DLSS.DenoiserMode`, `r.Streamline.DLSSG.Enable` and `r.Streamline.Reflex.Mode`, and reports each as unavailable when the variable is not registered.
+- This is the right architecture regardless of the login problem — a game should not carry a hard link to a vendor plugin, and a fresh clone has to build without one.
+- **Every DLSS row is present in the settings menu**, greyed with a reason when the plugins are absent; drop the official plugins into `Plugins/` and the same code drives them with no changes.
+- **Frame generation is exposed as on/off only** — the 4070 Super is RTX 40 series, so 2x; multi frame generation is 50 series and is deliberately not offered.
+- **Untested against the real plugins** — the console variable names follow NVIDIA's published Unreal documentation, but with the plugins unobtainable here I could not verify them at runtime, and I am not going to claim otherwise.
+
+## Architecture
+
+- **All UI is hand-written C++ Slate, no UMG assets** — widget blueprints cannot be authored reliably from a headless editor, and hand-built Slate removes an entire class of asset-generation risk; it also means a plugin hands the HUD a `TSharedRef<SWidget>` rather than a widget class.
+- **Every settings control is the same stepper** — one shape covers enums, booleans and quantised numbers, reads identically on mouse or pad, and depends on no style assets.
+- **Content is generated, never hand-authored** — `Tools/build_content.py` builds all 335 assets in four re-runnable stages.
+- **Asset creation is idempotent (reuse, don't delete-and-recreate)** — a package deleted in the same editor session stays referenced, and AssetTools then refuses to create over it, which made a second run of the build fail.
+- **Three authoring operations live in `UNightfallContentTools`** in the editor module: game feature component entries (a `USTRUCT` with no `BlueprintType`), DataTable rows (editor-only), and the PCG graph (instanced mesh selector).
+- **Features activate via `BuiltInInitialFeatureState: "Active"`** in the `.uplugin` — no bootstrap code, and adding a feature adds none.
+- **Save serialises `SaveGame`-flagged properties on actors *and their components*** — components are exactly where feature plugins keep state, so a plugin persists a value by marking a property and implementing nothing.
+- **The performance HUD reads the stats system with `-nodisplay`** — collects per-system and GPU pass data without the engine drawing its own overlay over ours.
+- **A plugin's stat counter appears in the HUD automatically** by being declared against `STATGROUP_Nightfall`; both plugins do.
+- **Terrain tiles are generated in world space then recentred** — neighbours share exact vertex positions along their seam, so there is no stitching pass, and the same height function places every actor without a trace.
+- **Data layers are created Activated** — runtime layers default to Unloaded, which shipped a completely empty world on the first run.
+- **Free flight is core, not a plugin** — it is a traversal and camera affordance belonging to the pawn's own movement, not a new mechanic; it drops collision, moves along the full view direction, and puts ascend and descend on jump and crouch.
+- **Power cells are half a pylon each** — two deliveries per pylon across six pylons is a route to plan rather than a checklist to tick.
+
+## Opening
+
+- **The slice starts at 17.85, not 15.2** — the sun's altitude is `asin(-cos(pi*H/12) * cos(38 deg))`, so it crosses the horizon at exactly 18.00 and the profile's night key at 18.51; 17.85 puts it 1.8 degrees up, weighted 82% to the Dusk key, with light shafts still on. Anything at or past 18.00 switches the directional sun off outright and opens on a sunless sky, and 17.5 is still more day than dusk. The usable dusk band is only 1.4 in-game hours wide, which is why the number is this specific.
+- **The start hour lives in `Config/DefaultGame.ini`, not in the level** — it is a `config` property on a `defaultconfig` `UDeveloperSettings` read once by the clock subsystem, so the ini overrides the C++ constructor and editing the constructor alone changes nothing. Both are set to the same value anyway, so a clone with a regenerated ini still opens at dusk. Keeping it out of the level also keeps it safe from the `level` stage, which deletes and rebuilds the map on every run.
+- **The briefing holds the day clock while it is up** — at 36 minutes per cycle an in-game hour costs 90 real seconds, so a player reading a one-page card would lose the entire dusk and arrive at the first pylon in full night. `ShowBriefing` pauses the clock and `DismissBriefing` restarts it, but only if showing the card is what stopped it, so a `Nightfall.PauseTime 1` from the console still wins.
+- **The briefing is dismissed with the existing menu key, not a new input action** — a new action would mean a native tag, a content rebuild through `nf_data.py`, and a repackage, all to add a second binding to a keyboard the player already has. `ToggleSettingsMenu` takes the card down when it is open and opens the menu when it is not. This also fixes the alternative bug, where the first `Esc` a new player presses would stack the settings menu on top of an unread card.
+- **The briefing takes no input of its own and never changes the input mode** — the game runs in `FInputModeGameOnly`, where viewport Slate widgets receive no mouse or keyboard events at all, so an on-screen button would have been dead on arrival; switching to `GameAndUI` to revive it would surface a cursor and kill mouse look. No widget in this project has ever taken keyboard focus and this one does not start.
+- **It is shown every launch, gated by an ini flag, rather than once** — a show-once flag persisted to `GameUserSettings.ini` is invisible and unresettable from inside the build, and this is a slice people relaunch to look at the lighting. `bShowBriefingOnStart=False` turns it off; `Nightfall.Briefing` brings it back mid-session.
+
+## Look and the day cycle
+
+- **The mouse Look mapping carries no Negate, and that is the fix for inverted pitch** — the stock template negates mouse Y to cancel `APlayerController::InputPitchScale`, which `Engine/Config/BaseGame.ini` sets to **-2.5**. That scale is only applied when `bEnableLegacyInputScales` is true, and `DefaultInput.ini` turns it off so a mouse delta reaches the camera at the size it was authored. Turning it off removed the magnitude *and the sign*, leaving the negate with nothing to cancel. The tell was that `Gamepad_Right2D` never had a negate, so mouse and pad pitched opposite ways: whatever the convention, they could not both be right.
+- **An Invert Look row was added rather than relying on getting the default right** — the mapping cannot be exercised without real OS mouse input reaching a focused window, which no automated check in this project can produce. The setting covers mouse and pad together because both feed one handler.
+- **The sun is faded across the horizon, never hidden** — `SetVisibility(false)` does not dim a directional light, it unregisters it, which nulls the scene's atmosphere sun; the sky atmosphere then falls back to the next directional light, which here is the moon, so the bright spot in the sky detached from the light direction in a single frame at 18:00. The sun now keeps its registration and its illuminance is multiplied by a `SmoothStep` over +2°..-2°, which is why the world light finally follows the sun.
+- **The old reason for hiding it still holds and is still satisfied** — below -2° `SmoothStep` returns exactly zero, so the authored lux is multiplied by nothing at all and surfaces cannot be lit from underneath. The remaining 0.001 lux floor exists only because a light at exactly zero intensity is dropped from the scene as if hidden, taking the sky's sun with it.
+- **`SetBloomScale` is gated behind a change test** — it marks the render state dirty, and the scale is lerped continuously through twilight, so setting it unconditionally re-registered the sun light every frame for the whole two-minute crossing.
+- **Light-shaft bloom is enabled if either key wants it, with the scale carrying the strength** — a bool cannot be interpolated, and flipping it at the midpoint popped the shafts on at half intensity. Now the flag only changes where the scale is already zero.
+- **The profile blends on `SmoothStep` rather than a raw ratio** — a linear blend arrives at each key at full rate and stops dead, which reads as the light snapping to a halt at the horizon and again at each end.
+- **The sun's gamma is fixed, and the moon was re-authored to survive the fix** — `SetLightColor(..., bSRGB=false)` stores a linear value unencoded while every reader decodes the stored byte as sRGB, so the sun and moon arrived a whole gamma dark and over-saturated while every other light in the project was already correct. Dropping the flag was a clear win for the sun: dusk went from a near-pure red (1.0, 0.235, 0.034) to the authored sodium amber (1.0, 0.520, 0.205), with real tonal range instead of a flat wash. It was a loss for the moon, whose *pale* authored blue had only ever looked cold because the bug was deepening it, so the night washed out to violet. The moon keys now carry the values the correct path needs to reproduce the calibrated look. The sun keys were not touched and now mean what they say.
+- **`VolumetricFogAlbedo` was left on `bSRGB=false` deliberately** — it looks like the same bug and is not verified to be. It is an `FColor` read back by the fog scene info rather than by a light, and the two directions are not symmetric. Changing it on the assumption washed the blue out of the entire night sky, because volumetric fog fills the frame at night. It stays as it is until someone traces that round trip end to end.
+- **The filament glow runs on the sky's own night-ward window** — it was a linear ramp over +6°..-8° while the sky blends over +10°..0°..-6°, so the blades were at 30% on the first frame of the game under 25,000 lux of sun, and still climbing a quarter of a minute after the sky had locked to the Night key. It now uses `1 - SmoothStep(-6, 0, altitude)`, matching the profile's night-ward blend to three decimals. The -6/+10 pair is mirrored in three places (sky profile, clock phase classification, and now the filament field); they were not hoisted to one setting because the clock's copy feeds phase-change broadcasts and moving it changes broadcast timing for no visible gain.
+- **The clock counts days, so the HUD can show a date** — `FMath::Fmod(..., 24)` in the tick was discarding the wrap, which meant the world had no notion of a second day at all. The tick now keeps the whole-day part of the advance, the date is a configured `StartDate` plus that count, and the save carries the count (`SaveVersion` 2, so older slots are refused rather than restored a day behind).
+- **`FDateTime::Parse` refuses a date with no time on it** — it splits on `-`, `:` and `.` and requires six or seven tokens, so `2231-11-04` fails and would have silently fallen back on every launch. The setting is read as `YYYY-MM-DD` and checked with `FDateTime::Validate` instead.
+- **Temperature is read backwards out of the day, not filtered forwards through it** — it is an exponentially weighted average of the solar load over the preceding twelve hours, which makes it a pure function of the hour. A forward-integrating filter would have been fewer lines and would have left `Nightfall.SetTime` landing on whatever temperature the *previous* hour had, and `Nightfall.PauseTime` freezing the model out of step with the sky it is supposed to be answering.
+- **The three-hour thermal lag is the whole reason the number is worth showing** — read straight off the sun it would peak at noon and bottom at midnight, which is not what ground does. Lagged, the cycle runs 13.5 °C at 16:00 down to -5.9 °C at 05:30, so the opening minute reads 9 °C at 17:51 and falls through 6 at 18:30 to 1 by 20:00: the walk into the dark is a number going down as well as a light going out.
+- **The solar altitude at an arbitrary hour is a closed form, not a rebuilt vector** — the azimuth swing is a yaw and cannot touch height, and rolling the arc away from vertical scales it by exactly the sine of the peak altitude, so the sixteen samples the thermal model takes each frame cost a `sin` and an `asin` apiece rather than two rotations.
+- **The temperature is coloured from Celsius even when it reads Fahrenheit** — the colour is a statement about the ground, not about the number, so freezing is where the readout goes neutral whichever unit is configured.
+- **The readout rounds to an integer before printing rather than using `%.0f`** — which renders the last fraction of a degree below zero as `-0`.
+
+## Being seen
+
+- **The sentinels sense conspicuity, not a flashlight** — `INightfallConspicuous` is the one thing a drone asks of what it is looking at, so it still has no idea what a player, a phone or a power cell is. Without it, geometry alone said a figure crossing bare ground in the dark was exactly as visible as one holding a lamp.
+- **A live power cell gives you away as surely as the phone does** — conspicuity reads the carried prop's emissive rather than its class, so a spent husk stops betraying you the moment it goes dark, and the core never learns what a power cell is. It also means the walk back to a pylon with a full cell is the exposed leg of the run, which is the part of the loop that should carry the risk.
+- **Light widens the range gate and fills the acquisition bar faster; it does not shorten the bar** — 1.5x sight range and 2x fill at full conspicuity. Losing line of sight still resets the bar to zero, so being lit costs you the window you had rather than the whole encounter.
+- **Conspicuity tuning lives on the actor, not in the tuning table** — `ApplyTuningRow` copies a fixed list of eight fields, so a row field added without editing it would silently never reach any drone in the level. Every drone in the shipped map takes a row, so that trap would have been invisible.
+
+## Player dust
+
+- **The player disturbs the ground the way the drones do** — same local fog volume medium at a person's scale: a running plume at half a rotor wash, and a landing puff at 1.6x that which decays in about a second. Nothing while still, crouched, airborne, in free flight, or over the compound and the filament beds.
+- **It costs no new trace** — the character ticks in `TG_PostPhysics`, so the movement component has already solved the floor, and `CurrentFloor.HitResult` gives the surface actor for free. The landing hit covers the one frame `CurrentFloor` is not maintained.
+- **Gated on raw ground speed rather than `IsSprinting()`** — that accessor only counts forward motion, so a fast strafe would have raised nothing.
+
+## Dust
+
+- **Dust is local fog volumes, not particles** — there is no Niagara here, and a sphere of height fog resting on the ground is what still air full of dust actually is. `ULocalFogVolumeComponent` is a movable scene component whose transform can be rewritten every frame for nothing, which covers both the static ground haze and a plume that has to follow a drone.
+- **Only bare ground is dusty** — the level tags terrain tiles `NF_Dusty` and places haze volumes only outside the clean zones, so the levelled compound reads as swept pavement and the filament beds as bound ground. `UNightfallDustSubsystem` answers the same question at runtime: the compound comes from a project setting, and every filament field registers its own footprint at `BeginPlay`.
+- **Grass has to declare itself rather than be traced for** — `ANightfallFilamentField` has no collision by design, so a downward trace passes straight through the blades and reports the terrain underneath. A trace alone would have called every grass bed dusty.
+- **Drone downwash scales with height above ground, not altitude** — the plume is driven by a downward trace from the drone's un-bobbed body position, sampled six times a second rather than per frame, because a drone crosses 340 cm/s on patrol and a half-metre-stale sample is invisible. Full strength at 300 cm and nothing at 1400 cm, against a measured patrol band of 900–1160 cm, so a patrolling drone trails a faint smudge and one dropping to investigate slams to full while the plume tightens from 1700 to 800 cm.
+- **Density changes are quantised, transforms are not** — every extinction setter calls `MarkRenderStateDirty` and rebuilds the volume's scene proxy, so pushing one per frame on six drones is per-frame allocation churn. Moving and scaling a volume is one render command and is free, so position tracks continuously while density only moves when it has actually changed.
+- **The plume hangs off the machine root in world space** — the hull carries the bank roll, and a plume parented to it would tilt with every turn.
+- **`r.LocalFogVolume.GlobalStartDistance` lowered to 200** — the default hides every local fog volume within 10 m of the camera, which is exactly where the dust at the player's feet and a drone passing overhead live.
+
+## Lighting calibration
+
+- **Night was recalibrated after looking at it**, twice: the first pass crushed the near ground to pure black, the correction over-brightened until an energised field blew out to white.
+- **Fixture output is now in the range real fittings occupy** — pylon core 8.5k lumens, ground wash 22k, drone sensor beam 11k, door threshold 4k, power cell 950; the first pass had these at 34k / 68k / 26k / 9k / 2.6k, which no exposure setting can rescue.
+- **Emissive intensities halved to roughly 5–11** — at 14–26 a panel blooms into a featureless white disc before the light it casts is visible.
+- **Auto exposure floor raised to EV -2** — letting it open to -3.5 and then adding a +1.55 night bias meant unlit ground was exposed as though it were lit, which defeats the entire premise.
+- **Night ambient trimmed** (sky light 0.115, moon 0.85 lux) — enough to keep the ground readable between pylons without competing with them.
+
+## Instrumentation
+
+- **The stat groups have to be enabled on the first tick, not in `Initialize`** — a world subsystem initialises before the stats thread will accept commands, and one issued that early is dropped silently, leaving the HUD's row lists permanently empty. This was shipping as an empty panel until it got looked at.
+- **`-nodisplay` on the stat command** collects the data without the engine drawing its own overlay on top of ours.
+- **GPU rows keep their queue in the name** — several passes are called "Queue Total", and using the friendly description alone collapsed graphics and async compute into one row.
+- **`bDisableAILogging=True`** — the engine paints a red "PROFILING WITH AI LOGGING ON" banner over the game whenever stats are collected, which the performance HUD does by design. There is no AI logging to collect here.
+- **The performance HUD mode is remembered if set before the HUD exists** — startup console commands run before the player controller builds it, and the mode was being dropped.
+
+## Bugs found and fixed during the build
+
+- **`unreal.Rotator`'s positional order is `(roll, pitch, yaw)`** — every authored rotation was landing on the wrong axis, which put the player's view 45° up and pitched every ring segment; all rotator construction now passes by keyword. Caught only by taking a screenshot and looking at it.
+- **Runtime data layers default to Unloaded** — the world had 22 actors in it instead of 203.
+- **A plugin's content was missing from the package** — the cooker does not follow soft object references held in C++ class defaults, so the scanner's input config was absent and the feature shipped with no key binding; each plugin root is now named in `DirectoriesToAlwaysCook`.
+- **`gc.VerifyAssumptions` cost a four second frame in the packaged build** — on by default outside Shipping, walking every object on every collect; disabled, because a frame budget you cannot measure is not a budget.
+- **Every Enhanced Input modifier serialised as null, and the player could not move** — modifiers are instanced UObjects, and ones built with a bare `unreal.InputModifierNegate()` in Python are transient, so they were dropped when the mapping context saved. The mappings survived without them, which meant W, A, S and D all produced the same raw `(1, 0, 0)` and every key strafed right; mouse pitch was inverted for the same reason. They are now created with the context as their outer.
+- **Ring meshes were built as spokes** — `box_ring` placed each segment facing along the radius, so the segment's length ran outward instead of tangentially and every "ring" in the project came out as a starburst: the pylon collars, the drone's yaw ring, the door lock wheel, the tank band. Segments now yaw to the tangent. Found by flying up to a pylon with the new fly camera, which is the mode's first return on cost.
+- **The S key negated the wrong axis** — modifiers apply left to right, and negating X after the swizzle had already moved the value onto Y did nothing. S now negates Y.
+- **`Nightfall.TestMove` exists because of the above** — it drives movement through Enhanced Input's own injection and reports the distance travelled, so a control scheme that is wired but inert fails loudly instead of silently. Walking measures 1157 cm in 3 s at 420 cm/s along the facing; flight measures 3739 cm at 1500 cm/s with no vertical drift.
+- **`Nightfall.WorldReport` now counts mesh instances by owning actor** — added because both of the bugs above were invisible in a report that only counted actors: instanced geometry is not actors, so a scatter generating nothing and a field rendering with the wrong material both read as a healthy world. The line reads `PCGVolume 25`, `NightfallFilamentField 11318`, `WorldPartitionHLOD 149`.
+- **Four materials shipped without the instanced-static-mesh usage flag** — the editor patches that at runtime ("Had to pass SMU back to game thread") so everything looked right in-editor, but a cooked build cannot recompile and silently substitutes the default material. The packaged build was rendering the filament field with no colour and, worse, no world position offset, which is the entire point of that entity. The flag is now authored on both master materials. The lesson is that a warning the editor fixes for you is still a bug in the package.
+- **The PCG scatter never generated anything** — `PCGSurfaceSampler` needs a surface, and this world has no landscape; fed the volume's own data it logged "No surfaces found from which to generate" on every launch. Replaced with a seeded `CreatePointsGrid` over the volume's floor plus a `TransformPoints` jitter, which is what the design intended anyway: points on the compound's levelled ground, deterministic from one seed, no landscape required.
+- **The scatter graph accumulated a duplicate node pair on every content rebuild** — the graph asset is reused and `AddNodeOfType` appends, so the shipped graph held seven copies of the same sampler and spawner. The builder now clears the graph first.
+- **PCG generation during the build crashed the save** — the async generation was still in flight while the level was being written; the component generates on load instead.
+- **Every physical key and mouse axis shipped unbound** — `UInputMappingContext.Mappings` is deprecated since UE 5.7: the runtime rebuild reads `DefaultKeyMappings.Mappings`, and `PostLoad` migrates the old array only for assets saved before the format change, never for ones this editor authors. The content build wrote the deprecated slot, so both contexts registered successfully and then applied zero key bindings — no warning anywhere, in editor `-game` and in the package alike. Invisible to every check in this file because `Nightfall.TestMove` feeds movement below the input system and `dump_input.py` read the same deprecated slot the build wrote; found by the first human to press a key in the final package. The build and the dump now use `DefaultKeyMappings`, the dump flags anything stranded in the deprecated slot, and `PawnClientRestart` logs each formerly-silent early-return plus a post-add registration check. The lesson is that a self-test proves the layer it enters at, and nothing above it.
+
+## World partition
+
+- **The region generates 15 runtime cells** across a 4x4 terrain grid, with 195 One File Per Actor packages and 212 actors at runtime.
+- **HLODs built with `WorldPartitionHLODsBuilder`** — 9 HLOD actors, one per populated cell per HLOD layer. Rebuild them after changing the level; the command is in README.md.
+- **Do not pipe a commandlet through `Select-Object -First N`** — it terminates the upstream process, which killed an HLOD build partway. The level was regenerated from the content build rather than inspected and repaired, which is the payoff for generating content in the first place.
+
+## Deferred, and why
+
+- **Niagara is unused** — there is no reliable way to author emitter graphs from a headless editor in 5.8, and a Niagara component pointing at no system is exactly the placeholder this project is not allowed to contain. Motion comes from the other three sources the brief names: rigid transform hierarchies, material world position offset, and Chaos rigid bodies.
+- **Volumetric clouds omitted** — 2-3 ms at 1440p for very little in a fog-heavy dusk palette where the sky is mostly gradient and shafts; Sky Atmosphere and volumetric fog carry it.
+- **PCG debris lays points on a flat plane rather than following terrain** — the grid is generated in the volume's local space, so the PCG volume is confined to the compound's levelled ground where that is correct; terrain-wide dressing uses the content build's own seeded scatter instead.
+- **No world-space outline for scanned objects** — that needs a custom-depth post-process material, and the scanner instead tints scanned carryables directly and lists contacts with bearing and distance, which works with no extra asset.
+- **A player phone light, reversing the earlier no-torch decision** — the original entry read "no player torch, deliberate, not deferred: the pylons lighting the field *is* the reward loop, and a headlamp would flatten it." That reasoning still holds against a *headlamp*, so what was added is a phone: 45 lumens in a 30° cone reaching about 9 m, versus a pylon's 22,000 lumen ground wash. Roughly 74 lux at 10 m from a pylon against 13 lux at arm's length from the phone, so it reads the ground at your feet and cannot light the field. Unshadowed, because a light sitting on the camera casts shadows that fall entirely behind their own casters, and volumetric scattering held at 0.6 where every other fixture sits at 1.6–3.2, because a camera-mounted light at those values fills the near froxels and washes the screen white in night fog.
+- **Streaming cost is measured but never yet non-zero** — the shipped 512 m region fits inside the loading range, so no cells are in flight during play; the budget and the HUD row are in place for the 4 km the world is authored for.
+
+## Measured
+
+- **2560×1440, RTX 4070 Super, Development build, no DLSS (TSR fallback at 100% render scale): 138–188 fps, frame 5.3–7.2 ms against a 16.7 ms budget, GPU 4.0–6.5 ms, 100% of frames within budget after warm-up.** Re-measured on the final package over 110 uninterrupted seconds: 148–153 fps, frame 6.6 ms, GPU 6.0 ms, 100% in budget, 2 hitches (both first-frame), 0 streaming hitches, 0 errors in the log.
+- Measured from the outer corner with the whole field in view, at three points in the cycle: mid afternoon, golden hour, and night with all six pylons online, every drone beam lit and fog at night density. The three are within a millisecond of each other.
+- **GPU breakdown at night, all six pylons online** (from the HUD's own rows): graphics queue 6.12 ms total — deferred lighting 1.98, post processing 1.65, TSR 1.45, Lumen screen probe gather 1.19, MegaLights 0.74, shadow depths 0.67, Lumen reflections 0.60, volumetric fog 0.49, Lumen scene lighting 0.47.
+- **MegaLights costs 0.74 ms** for every shadow-casting local light in the scene, which is the single number that justifies the whole lighting approach.
+- The 60 fps floor is met with roughly 2.4x headroom before frame generation, which is the correct direction: frame generation is headroom here, not how the floor is reached.
+- **A 22 ms reading at golden hour turned out to be contention**, not the scene: a previous run's process was still shutting down. Re-measured clean, the same moment costs 6.5 ms. Worth recording because the first number would have been reported as a real regression.
+- **A 43 ms reading looked like a 5x regression and was contention again**, from outside the project this time: eight leaked headless Chrome instances left running by an unrelated tool held ~80% of the GPU and 6.5 GB of VRAM. The signature is diagnostic — *every* pass inflated by the same factor, including ones that only care about resolution like TSR and post processing, which no content change can do. Suspending them (not killing them; they were not ours) restored 152 fps exactly. Two false alarms from contention now, so: check what else owns the GPU before believing a uniform slowdown.
+- **`Packaged/Windows/Nightfall.exe` is a launcher shim.** It spawns the real executable under `Binaries/Win64` and returns, so killing the handle you launched leaves the game running and holding the GPU. Stop it by process name.
+- Worst frames (33–40 ms) are all first-run shader compilation, and no hitch has ever been attributed to streaming.

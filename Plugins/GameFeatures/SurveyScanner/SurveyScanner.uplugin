@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Survey Scanner",
+	"Description": "A pulse scan that names what is around the player in the dark. Ships its own input mapping.",
+	"Category": "Nightfall Features",
+	"CreatedBy": "Nightfall",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"ExplicitlyLoaded": true,
+	"Modules": [
+		{
+			"Name": "SurveyScannerRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"BuiltInInitialFeatureState": "Active"
+}

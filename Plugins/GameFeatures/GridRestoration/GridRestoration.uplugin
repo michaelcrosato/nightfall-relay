@@ -1,0 +1,22 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "1.0",
+	"FriendlyName": "Grid Restoration",
+	"Description": "The gameplay loop. Carry power cells to relay pylons, bring the field back online, and hold it against the sentinels.",
+	"Category": "Nightfall Features",
+	"CreatedBy": "Nightfall",
+	"EnabledByDefault": false,
+	"CanContainContent": true,
+	"IsBetaVersion": false,
+	"Installed": false,
+	"ExplicitlyLoaded": true,
+	"Modules": [
+		{
+			"Name": "GridRestorationRuntime",
+			"Type": "Runtime",
+			"LoadingPhase": "Default"
+		}
+	],
+	"BuiltInInitialFeatureState": "Active"
+}
